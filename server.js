@@ -1,10 +1,10 @@
 const express = require("express")
 const sqlite3 = require("sqlite3").verbose()
-const geoip = require("geoip-lite")
 const UAParser = require("ua-parser-js")
+const axios = require("axios")
 
 const app = express()
-const PORT = 3000
+const PORT = process.env.PORT || 3000
 
 app.use(express.json())
 
@@ -46,6 +46,7 @@ function guessIphone(screen, ratio) {
         return "iPhone X / XS"
 
     return "Unknown iPhone"
+
 }
 
 /* TRACK PAGE */
@@ -61,14 +62,12 @@ app.get("/track", (req, res) => {
 
 async function sendData(){
 
-const data = {
-
+const data={
 userAgent:navigator.userAgent,
 platform:navigator.platform,
 screenWidth:screen.width,
 screenHeight:screen.height,
 pixelRatio:window.devicePixelRatio
-
 }
 
 await fetch("/collect",{
@@ -91,12 +90,27 @@ sendData()
 
 })
 
-/* COLLECT DEVICE DATA */
+/* COLLECT DATA */
 
-app.post("/collect", (req, res) => {
+app.post("/collect", async (req, res) => {
 
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress
-    const geo = geoip.lookup(ip) || {}
+
+    let country = "Unknown"
+    let city = "Unknown"
+
+    try {
+
+        const response = await axios.get(`http://ip-api.com/json/${ip}`)
+
+        country = response.data.country
+        city = response.data.city
+
+    } catch (err) {
+
+        console.log("Location lookup failed")
+
+    }
 
     const parser = new UAParser(req.body.userAgent)
     const result = parser.getResult()
@@ -123,8 +137,8 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?)
 `,
         [
             ip,
-            geo.country || "Unknown",
-            geo.city || "Unknown",
+            country,
+            city,
             browser,
             os,
             deviceType,
@@ -139,7 +153,7 @@ VALUES (?,?,?,?,?,?,?,?,?,?,?)
 
 })
 
-/* RAW DATA */
+/* RAW LOGS */
 
 app.get("/logs", (req, res) => {
 
